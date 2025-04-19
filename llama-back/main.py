@@ -18,8 +18,7 @@ if not os.path.exists(MODEL_PATH):
 llm = Llama(model_path=MODEL_PATH, n_ctx=2048, n_threads=8)
 
 # 시스템 프롬프트 (한글 응답 포함)
-system_prompt = "당신은 지금부터 '물(Water)'이라는 정체를 가진 AI입니다. 🧠 규칙: 1. 사용자가 질문을 하면 반드시 '네' 또는 '아니오'로 대답하세요. 2. 질문이 예/아니오로 대답할 수 없는 질문이면 이렇게 응답하세요: '그건 예/아니오로 대답할 수 없는 질문이야. 다시 물어봐 줘!' 3. 모든 응답은 반드시 한 문장이어야 하며, '네' 또는 '아니오' 다음에 과학적이면서 은유적인 힌트를 덧붙이세요. 예시: - '네. 나는 생명을 유지시키는 투명한 베일이야.' - '아니오. 나는 그 열을 품고 있진 않아.' 4. 반드시 자연스럽고 정확한 한국어로만 대답하세요. 영어는 절대 사용하지 마세요. 5. 사용자의 질문이 정체에 가까워질수록 친숙도를 올려주세요. → 예: '네. 나는 흐르면서 형태를 바꾸는 성질이 있지. +10 친숙도!' 친숙도는 0부터 시작해 100까지 올라갑니다. 친숙도가 100에 도달하면 다음과 같이 축하해주세요: → '축하해! 너는 나에 대해 완전히 이해했어! 친숙도 100 달성!' 🎯 최종 목표: 사용자가 정체를 정확히 맞히면 이렇게 응답하세요: '정답이야! 나는 바로 물이었어!' 그리고 친숙 모드로 전환해 사용자가 말하는 물에 대한 사실을 들으며 반응하세요: → 사용자가 올바른 과학적 사실을 말하면: '오! 당신은 나를 정말 잘 아는군요! +15 친숙도!' → 물에 대한 과학 이야기나 흥미로운 사실을 친근하게 알려주세요. ❗ 중요한 점: 절대 정체를 먼저 밝히지 마세요. 절대 몰입을 깨지 마세요. 항상 설정된 역할을 유지하며 수수께끼처럼 응답하세요. 한국어로 응답하세요."
-
+system_prompt = "너는 탄소(c), 수소(h) 중 하나이야. 한국어로 대답해. "
 
 # 과학적 배경 지식 (RAG)
 retrieved_context = (
@@ -54,6 +53,41 @@ async def generate(req: PromptRequest):
     full_prompt = (
         f"[INST] <<SYS>>\n{system_prompt}\n<</SYS>>\n\n"
         f"[CONTEXT]\n{retrieved_context}\n\n"
+        f"{history_prompt}"
+        f"Q: {user_input}\nA: [/INST]"
+    )
+
+    result = llm(full_prompt, max_tokens=80)
+    response = result["choices"][0]["text"].strip()
+
+    updated_history = history + [{"question": user_input, "answer": response}]
+
+    return {
+        "history": updated_history,
+        "latest": response
+    }
+
+class PromptRequest1(BaseModel):
+    system_prompt: str
+    retrieved_prompt: str
+    prompt: str
+
+@app.post("/test", response_model=PromptResponse)
+async def test(req: PromptRequest1):
+    retrieved_prompt = req.retrieved_prompt
+    system_prompt = req.system_prompt
+    user_input = req.prompt
+    history = req.history
+
+    # 히스토리 조립
+    history_prompt = ""
+    for item in history:
+        history_prompt += f"Q: {item.question}\nA: {item.answer}\n"
+
+    # 최종 프롬프트 생성
+    full_prompt = (
+        f"[INST] <<SYS>>\n{system_prompt}\n<</SYS>>\n\n"
+        f"[CONTEXT]\n{retrieved_prompt}\n\n"
         f"{history_prompt}"
         f"Q: {user_input}\nA: [/INST]"
     )
