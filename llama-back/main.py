@@ -40,6 +40,9 @@ class PromptResponse(BaseModel):
     history: List[dict]
     latest: str
 
+class PromptResponse1(BaseModel):
+    latest: str
+
 @app.post("/generate", response_model=PromptResponse)
 async def generate(req: PromptRequest):
     user_input = req.prompt
@@ -72,32 +75,22 @@ class PromptRequest1(BaseModel):
     retrieved_prompt: str
     prompt: str
 
-@app.post("/test", response_model=PromptResponse)
+@app.post("/test", response_model=PromptResponse1)
 async def test(req: PromptRequest1):
     retrieved_prompt = req.retrieved_prompt
     system_prompt = req.system_prompt
     user_input = req.prompt
-    history = req.history
 
-    # 히스토리 조립
-    history_prompt = ""
-    for item in history:
-        history_prompt += f"Q: {item.question}\nA: {item.answer}\n"
-
-    # 최종 프롬프트 생성
+    # 프롬프트 생성
     full_prompt = (
         f"[INST] <<SYS>>\n{system_prompt}\n<</SYS>>\n\n"
         f"[CONTEXT]\n{retrieved_prompt}\n\n"
-        f"{history_prompt}"
         f"Q: {user_input}\nA: [/INST]"
     )
 
     result = llm(full_prompt, max_tokens=80)
     response = result["choices"][0]["text"].strip()
 
-    updated_history = history + [{"question": user_input, "answer": response}]
-
     return {
-        "history": updated_history,
-        "latest": response
+        "latest": response  # ✅ history 제거
     }
